@@ -1,0 +1,159 @@
+// Prisma Schema for AuthForge
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String         @id @default(uuid())
+  email                String         @unique
+  passwordHash         String
+  firstName            String
+  lastName             String
+  isEmailVerified      Boolean        @default(false)
+  isActive             Boolean        @default(true)
+  roleId               String
+  role                 Role           @relation(fields: [roleId], references: [id])
+  failedLoginAttempts  Int            @default(0)
+  lockoutUntil         DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  sessions             Session[]
+  refreshTokens        RefreshToken[]
+  oauthAccounts        OAuthAccount[]
+  apiKeys              ApiKey[]
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id           String         @id @default(uuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress    String?
+  userAgent    String?
+  deviceType   String?
+  lastActiveAt DateTime       @default(now())
+  isRevoked    Boolean        @default(false)
+  expiresAt    DateTime
+  createdAt    DateTime       @default(now())
+
+  refreshTokens RefreshToken[]
+
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  familyId   String
+  isUsed     Boolean  @default(false)
+  isRevoked  Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+model OAuthAccount {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String   // e.g., 'google', 'github'
+  providerAccountId String
+  createdAt         DateTime @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@map("oauth_accounts")
+}
+
+model ApiKey {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  keyIdentifier String    @unique // e.g., 'af_live_x9k2m'
+  keySecretHash String    // Hashed secret
+  permissions   String[]  // Scopes array e.g. ["PROJECT_READ", "USER_READ"]
+  expiresAt     DateTime?
+  lastUsedAt    DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@map("api_keys")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // e.g. LOGIN_SUCCESS, TOKEN_REFRESH, etc.
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model GatewayRoute {
+  id                      String   @id @default(uuid())
+  pathPrefix              String   @unique // e.g., '/gateway/projects'
+  targetUrl               String   // e.g., 'http://localhost:4000/mock/projects'
+  requireAuth             Boolean  @default(true)
+  requiredPermissions     String[] // e.g., ['PROJECT_READ']
+  rateLimitEnabled        Boolean  @default(true)
+  rateLimitRequests       Int      @default(100)
+  rateLimitWindowSeconds  Int      @default(60)
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@map("gateway_routes")
+}

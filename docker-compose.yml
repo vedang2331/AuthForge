@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # AuthForge Backend & Gateway Platform
+  authforge-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: authforge-app
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - API_PREFIX=/api/v1
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/authforge?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_ACCESS_SECRET=authforge_super_secret_access_key_change_in_production_32bytes
+      - JWT_ACCESS_EXPIRATION=15m
+      - JWT_REFRESH_SECRET=authforge_super_secret_refresh_key_change_in_production_32bytes
+      - JWT_REFRESH_EXPIRATION=7d
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # PostgreSQL Database Container
+  postgres:
+    image: postgres:16-alpine
+    container_name: authforge-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: authforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d authforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache Container
+  redis:
+    image: redis:7-alpine
+    container_name: authforge-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
